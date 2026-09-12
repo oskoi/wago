@@ -54,6 +54,15 @@ with `v0.1.0-beta.8`; earlier prereleases remain available in the
   branch patching, Windows cleanup behavior, semantic-version prerelease
   ranges, build output aliasing, and installer fallback behavior.
 
+### Fixed
+
+- Imported start functions now receive the instantiation context's cancellation
+  and deadline through callback-scoped contexts. Startup traps preserve their
+  original errors.
+- Native artifacts now retain local and imported start functions and run them
+  for each new instance. Artifact version 2 and metadata section ID 2 remain
+  unchanged.
+
 ## [v0.1.0-beta.8] - 2026-09-10
 
 ### Added
