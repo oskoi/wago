@@ -18,6 +18,15 @@ with `v0.1.0-beta.8`; earlier prereleases remain available in the
 - The README's one-shot Go installer command now runs the installer from
   `@main`, and the redundant persistent-installer example has been removed.
 
+### Fixed
+
+- Imported start functions now receive the instantiation context's cancellation
+  and deadline through callback-scoped contexts. Startup traps preserve their
+  original errors.
+- Native artifacts now retain local and imported start functions and run them
+  for each new instance. Artifact version 2 and metadata section ID 2 remain
+  unchanged.
+
 ## [v0.1.0-beta.8] - 2026-09-10
 
 ### Added

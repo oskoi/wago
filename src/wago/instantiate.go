@@ -1702,8 +1702,7 @@ func (b *instanceBuilder) instantiate() (result *Instance, err error) {
 			if err != nil {
 				return nil, fmt.Errorf("start function %q: %w", key, err)
 			}
-			caller := in.beginHostCallScopeReserved(in.constructionReservationSnapshot())
-			if err := callImportedStart(fn, caller); err != nil {
+			if err := in.callImportedStart(opts.startContext, fn); err != nil {
 				return nil, fmt.Errorf("start function %q: %w", key, err)
 			}
 		} else {
@@ -1744,11 +1743,26 @@ func (b *instanceBuilder) instantiate() (result *Instance, err error) {
 	return in, nil
 }
 
-func callImportedStart(fn syncHostBinding, caller instanceHostModule) (err error) {
+func (in *Instance) callImportedStart(ctx context.Context, fn syncHostBinding) (err error) {
+	restoreContext := bindHostInvocationParent(in, invocationContextSetFor(ctx).callback)
+	defer restoreContext()
+	caller := in.beginHostCallScopeReserved(in.constructionReservationSnapshot())
 	defer caller.scope.end(caller.generation, caller.parentGeneration)
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			switch value := recovered.(type) {
+			case HostTrap:
+				if value.Err == nil {
+					err = fmt.Errorf("wago: host trapped without an error")
+				} else {
+					err = value.Err
+				}
+			case *HostTrap:
+				if value == nil || value.Err == nil {
+					err = fmt.Errorf("wago: host trapped without an error")
+				} else {
+					err = value.Err
+				}
 			case HostExit:
 				err = &ExitError{Code: value.Code}
 			case *HostExit:

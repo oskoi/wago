@@ -2923,6 +2923,19 @@ func (c *Compiled) validate() error {
 	if err := validateSigs("local", c.Funcs); err != nil {
 		return err
 	}
+	if c.HasStart {
+		functions, index := c.Funcs, c.StartLocalFunc
+		if c.StartIsImport {
+			functions, index = c.importFuncSigs, c.StartImportIdx
+		}
+		if index < 0 || index >= len(functions) {
+			return fmt.Errorf("compiled metadata invalid: start function index %d out of range", index)
+		}
+		signature := functions[index]
+		if len(signature.Params) != 0 || len(signature.Results) != 0 {
+			return fmt.Errorf("compiled metadata invalid: start function must have no parameters or results")
+		}
+	}
 	required := c.requiredFeatures
 	unsupported := required &^ coreFeaturesWithoutSidecar
 	var staged CoreFeatures
@@ -4008,10 +4021,9 @@ func (c *Compiled) validateDeferredOffsetGlobal(kind string, seg, idx int) error
 
 const wagoMagic = "WAGO"
 
-// Version 1 is the initial public compiled-artifact format. Wago is unreleased,
-// so incompatible development layouts were consolidated instead of consuming
-// public version numbers. The codec never serializes live owners, collector
-// handles, mappings, tokens, active handlers, thunk addresses, or store identity.
+// Version 2 uses strict ordered sections with stable execution metadata.
+// The codec never serializes live owners, collector handles, mappings, tokens,
+// active handlers, thunk addresses, or store identity.
 const wagoVersion = 2
 
 // MarshalBinary serializes the precompiled module to a ".wago" blob.

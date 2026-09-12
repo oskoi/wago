@@ -548,6 +548,28 @@ func TestCallerResolverInvocationContextEntryPaths(t *testing.T) {
 		name string
 		run  func(*testing.T, *Runtime, *invocationContextTestState, context.Context)
 	}{
+		{"imported start", func(t *testing.T, rt *Runtime, _ *invocationContextTestState, parent context.Context) {
+			module, err := rt.Compile(invocationContextImportedStartModule())
+			if err != nil {
+				t.Fatal(err)
+			}
+			in, err := rt.Instantiate(parent, module)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer in.Close()
+		}},
+		{"managed imported start", func(t *testing.T, rt *Runtime, state *invocationContextTestState, parent context.Context) {
+			module, err := rt.Compile(invocationContextImportedStartModule())
+			if err != nil {
+				t.Fatal(err)
+			}
+			in, err := state.manager.Instantiate(parent, module)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer in.Close()
+		}},
 		{"direct host reexport", func(t *testing.T, rt *Runtime, _ *invocationContextTestState, parent context.Context) {
 			module, err := rt.Compile(invocationContextReexportModule())
 			if err != nil {
@@ -627,6 +649,51 @@ func TestCallerResolverInvocationContextEntryPaths(t *testing.T) {
 			}
 			if callbackContext.Err() != context.Canceled {
 				t.Fatalf("callback context after entry return = %v, want context.Canceled", callbackContext.Err())
+			}
+		})
+	}
+}
+
+func TestCallerResolverImportedStartParentCancellation(t *testing.T) {
+	for _, concrete := range []bool{false, true} {
+		name := "legacy"
+		if concrete {
+			name = "concrete"
+		}
+		t.Run(name, func(t *testing.T) {
+			state := &invocationContextTestState{concrete: concrete}
+			rt := newInvocationContextTestRuntime(t, state)
+			defer rt.Close()
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var callbackErr error
+			state.outer = func(caller HostModule, _, _ []uint64) {
+				ctx, err := state.resolver.InvocationContext(caller)
+				if err != nil {
+					callbackErr = err
+					return
+				}
+				cancel()
+				select {
+				case <-ctx.Done():
+					callbackErr = ctx.Err()
+				case <-time.After(5 * time.Second):
+					callbackErr = errors.New("parent cancellation did not reach the imported start")
+				}
+			}
+			module, err := rt.Compile(invocationContextImportedStartModule())
+			if err != nil {
+				t.Fatal(err)
+			}
+			in, err := rt.Instantiate(parent, module)
+			if in != nil {
+				defer in.Close()
+			}
+			if !errors.Is(callbackErr, context.Canceled) {
+				t.Fatalf("imported start context error = %v, want context.Canceled", callbackErr)
+			}
+			if in != nil || !errors.Is(err, context.Canceled) {
+				t.Fatalf("Instantiate = %v, %v, want no instance and context.Canceled", in, err)
 			}
 		})
 	}

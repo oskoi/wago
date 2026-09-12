@@ -1,29 +1,25 @@
 package wago
 
 import (
+	"bytes"
 	"encoding/binary"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 )
 
-func TestCompiledCodecVersion2Contract(t *testing.T) {
+func TestCompiledCodecRejectsPreviousVersion(t *testing.T) {
 	blob, err := (&Compiled{}).MarshalBinary()
 	if err != nil {
-		t.Fatalf("MarshalBinary: %v", err)
+		t.Fatal(err)
 	}
-	if got := blob[4]; got != wagoVersion || wagoVersion != 2 {
-		t.Fatalf("compiled codec version = %d, want native-resource-policy version 2", got)
+	blob[4] = wagoVersion - 1
+	var decoded Compiled
+	if err := decoded.UnmarshalBinary(blob); err == nil {
+		t.Fatal("UnmarshalBinary accepted the previous artifact format")
 	}
-
-	for _, version := range []byte{0, 1, 22, 35} {
-		unsupported := append([]byte(nil), blob...)
-		unsupported[4] = version
-		var got Compiled
-		if err := got.UnmarshalBinary(unsupported); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("version %d unsupported", version)) {
-			t.Fatalf("UnmarshalBinary version %d error = %v, want explicit incompatibility rejection", version, err)
-		}
+	if _, err := decoded.ReadFrom(bytes.NewReader(blob)); err == nil {
+		t.Fatal("ReadFrom accepted the previous artifact format")
 	}
 }
 

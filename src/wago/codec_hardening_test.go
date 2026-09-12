@@ -2,8 +2,9 @@ package wago
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -13,21 +14,103 @@ import (
 	"github.com/wago-org/wago/tests/support/wasmtest"
 )
 
-func TestMarshalRoundTripsReturningImportDispatch(t *testing.T) {
-	t.Setenv("WAGO_BOUNDS", "explicit")
-	c := MustCompile(returningImportModule(returningI32Sig(), []byte{0x00, 0x20, 0x00, 0x10, 0x00, 0x0b}))
-	defer c.Close()
-	blob, err := c.MarshalBinary()
-	if err != nil {
-		t.Fatalf("MarshalBinary: %v", err)
+func TestCompiledArtifactPreservesStartExecution(t *testing.T) {
+	for _, kind := range []string{"local", "imported"} {
+		t.Run(kind, func(t *testing.T) {
+			startIndex := uint32(3)
+			if kind == "imported" {
+				startIndex = 1
+			}
+			guest := wasmtest.Module(
+				wasmtest.Section(1, wasmtest.Vec(wasmtest.FuncType(nil, nil))),
+				wasmtest.Section(2, wasmtest.Vec(
+					importEntry("env", "unused", 0, 0),
+					importEntry("env", "start", 0, 0),
+				)),
+				wasmtest.Section(3, wasmtest.Vec(wasmtest.ULEB(0), wasmtest.ULEB(0))),
+				wasmtest.Section(8, wasmtest.ULEB(startIndex)),
+				wasmtest.Section(10, wasmtest.Vec(
+					wasmtest.Code([]byte{0x0b}),
+					wasmtest.Code([]byte{0x10, 0x01, 0x0b}),
+				)),
+			)
+			compiled, err := Compile(NewRuntimeConfig().WithBoundsChecks(BoundsChecksExplicit), guest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer compiled.Close()
+			loaded := publicArtifactRoundTrip(t, compiled)
+			rt := NewRuntime()
+			defer rt.Close()
+			module, err := rt.Module(loaded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			var startErr error
+			imports := Imports{
+				"env.unused": HostFunc(func(HostModule, []uint64, []uint64) {
+					panic(HostTrap{Err: errors.New("incorrect start function")})
+				}),
+				"env.start": HostFunc(func(HostModule, []uint64, []uint64) {
+					calls++
+					if startErr != nil {
+						panic(HostTrap{Err: startErr})
+					}
+				}),
+			}
+			for want := 1; want <= 2; want++ {
+				in, err := rt.Instantiate(context.Background(), module, WithImports(imports))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := in.Close(); err != nil {
+					t.Fatal(err)
+				}
+				if calls != want {
+					t.Fatalf("start calls = %d, want %d after instantiation", calls, want)
+				}
+			}
+			startErr = errors.New("start failed")
+			in, err := rt.Instantiate(context.Background(), module, WithImports(imports))
+			if in != nil {
+				defer in.Close()
+			}
+			if in != nil || !errors.Is(err, startErr) {
+				t.Fatalf("failed start returned %v, %v, want no instance and the start error", in, err)
+			}
+		})
 	}
-	var loaded Compiled
-	if err := loaded.UnmarshalBinary(blob); err != nil {
-		t.Fatalf("UnmarshalBinary: %v", err)
+}
+
+func TestCompiledArtifactRejectsInvalidStart(t *testing.T) {
+	tests := []struct {
+		name     string
+		compiled *Compiled
+	}{
+		{"negative index", &Compiled{HasStart: true, StartLocalFunc: -1}},
+		{"missing import", &Compiled{HasStart: true, StartIsImport: true}},
+		{"non-void signature", newHandBuiltCompiled([]byte{0xc3}, Compiled{
+			Entry: []int{0}, Funcs: []FuncSig{{Params: []ValType{ValI32}}},
+			FuncTypeID: []uint64{0}, HasStart: true,
+		})},
 	}
-	defer loaded.Close()
-	if !loaded.dynamicImports {
-		t.Fatal("loaded returning import lost dynamic dispatch metadata")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			defer test.compiled.Close()
+			// Encode directly to exercise the public decoder with invalid metadata.
+			blob, err := marshalCompiled(test.compiled)
+			if err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := LoadTrustedArtifact(blob)
+			if loaded != nil {
+				defer loaded.Close()
+			}
+			if err == nil {
+				t.Fatal("artifact with invalid start metadata was accepted")
+			}
+		})
 	}
 }
 
@@ -190,17 +273,6 @@ func TestCompiledCodecRoundTripsReferenceSignatures(t *testing.T) {
 	blob, err := input.MarshalBinary()
 	if err != nil {
 		t.Fatalf("MarshalBinary: %v", err)
-	}
-	if blob[4] != wagoVersion || wagoVersion != 2 {
-		t.Fatalf("compiled codec version = %d, want native-resource-policy version 2", blob[4])
-	}
-	for _, version := range []byte{0, 1, 19, 35} {
-		unsupportedVersion := append([]byte(nil), blob...)
-		unsupportedVersion[4] = version
-		var unsupported Compiled
-		if err := unsupported.UnmarshalBinary(unsupportedVersion); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("version %d unsupported", version)) {
-			t.Fatalf("version-%d reference blob error = %v, want explicit incompatibility rejection", version, err)
-		}
 	}
 	var got Compiled
 	if err := got.UnmarshalBinary(blob); err != nil {

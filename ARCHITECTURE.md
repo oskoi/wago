@@ -13,6 +13,11 @@ custom XMM values use a separate register bank, even when register numbers match
 Context-aware invocation checks cancellation after it acquires the instance
 gate, before it reads export metadata or enters guest or host code.
 
+[Runtime instantiation](src/wago/runtime.go) carries its context through local and imported start
+functions. Local starts use the normal native cancellation mechanism. Host
+callbacks receive callback-scoped cancellation and deadlines without context
+values. A canceled initialization returns no instance and waits for cleanup.
+
 CLI feature settings apply enables before disables. An explicit disable of
 `extended-constant-expressions` also disables `extended-const-expressions`.
 Version-1 global and local settings accept known retired optimization names as
@@ -20,7 +25,8 @@ compatibility no-ops. Unknown names still produce an error.
 The retired list includes `inline-loop-callees` and `deep-fp-pins` from v1.
 
 Host calls convert both `HostExit` and non-nil `*HostExit` panics to `ExitError`,
-including calls through a Wasm wrapper and replayed host logs.
+including calls through a Wasm wrapper and replayed host logs. Imported starts
+also preserve errors from `HostTrap` and non-nil `*HostTrap` panics.
 
 Both native backends consume the complete result-type vector of a typed
 `select` through the shared Wasm immediate reader. Explicit reference types
@@ -75,9 +81,9 @@ cooperative cancellation safepoints.
 
 <!-- artifact:codec-version 2 -->
 
-Compiled artifact version 2 is a strict ordered section stream. It has a fixed
-header and section count, followed by length-delimited native-code and metadata
-sections. Wago rejects unknown, duplicate, reordered, truncated, over-limit, and
+Compiled artifact version 2 is a strict ordered section stream. Its fixed header
+declares two sections: native code (ID 1), then metadata (ID 2). Wago rejects
+unknown, duplicate, reordered, truncated, over-limit, and
 non-canonical section encodings. `Compiled.WriteTo` streams code without making a
 second full image. `Compiled.ReadFromWithLimits` reads code directly into an RW
 mapping, applies separate code and metadata bounds, validates all metadata, and
@@ -87,11 +93,12 @@ loading therefore expose the same module/name pair without decoding source again
 Plugin bindings must match that pair before they satisfy an import. This prevents
 dotted flat-key collisions from crossing module authority boundaries. Artifact
 decoding also caps the expanded function-import directory at 64 MiB, so compact
-empty names cannot produce an unbounded slice allocation. Version 2 replaced the
-initial version 1 format when generated `memory.grow` code and the native instance
-context gained a runtime memory-page quota. Wago rejects every artifact version
-other than 2, including version 1. There is no compatibility decoder or
-dual-format ambiguity.
+empty names cannot produce an unbounded slice allocation. The
+[artifact codec](src/wago/codec.go) records whether a module has a start function,
+its local or imported kind, and its index.
+The decoder validates that the target exists and has no parameters or results.
+Each instance runs that start function before instantiation succeeds, including
+instances created from native artifacts.
 
 ### CPU and SIMD baseline
 

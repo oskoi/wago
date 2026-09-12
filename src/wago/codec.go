@@ -310,6 +310,15 @@ func marshalCompiledMetadataMeasured(c *Compiled) ([]byte, ArtifactSectionSizes,
 	if err := w.funcSigs(c.Funcs, c.Types); err != nil {
 		return nil, sizes, err
 	}
+	w.bool(c.HasStart)
+	if c.HasStart {
+		w.bool(c.StartIsImport)
+		if c.StartIsImport {
+			w.ivar(c.StartImportIdx)
+		} else {
+			w.ivar(c.StartLocalFunc)
+		}
+	}
 	mark(&sizes.Functions)
 	w.stringIntMap(c.Exports)
 	w.nameSec(c.Names)
@@ -911,6 +920,25 @@ func unmarshalCompiledMetadataBudget(c *Compiled, data []byte, budget *artifactD
 	c.Funcs, err = r.funcSigs(c.Types)
 	if err != nil {
 		return err
+	}
+	c.HasStart, err = r.bool()
+	if err != nil {
+		return err
+	}
+	if c.HasStart {
+		c.StartIsImport, err = r.bool()
+		if err != nil {
+			return err
+		}
+		index, err := r.ivar()
+		if err != nil {
+			return err
+		}
+		if c.StartIsImport {
+			c.StartImportIdx = index
+		} else {
+			c.StartLocalFunc = index
+		}
 	}
 	c.Exports, err = r.stringIntMap()
 	if err != nil {
