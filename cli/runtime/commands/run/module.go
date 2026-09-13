@@ -7,21 +7,21 @@ import (
 	"io"
 
 	"github.com/wago-org/wago"
+	"github.com/wago-org/wago/artifactcache"
 	"github.com/wago-org/wago/cli/internal/ui"
 	"github.com/wago-org/wago/cli/internal/wasmcall"
-	"github.com/wago-org/wago/cli/runtime/internal/artifactcache"
 	"github.com/wago-org/wago/cli/runtime/internal/modulefile"
 )
 
-func mustLoadModule(file string, config *wago.RuntimeConfig, runtime *wago.Runtime, cache artifactcache.Cache, allowNativeArtifact bool) *wago.Module {
-	module, err := loadModule(file, config, runtime, cache, allowNativeArtifact)
+func mustLoadModule(file string, runtime *wago.Runtime, cache artifactcache.Cache, allowNativeArtifact bool) *wago.Module {
+	module, err := loadModule(file, runtime, cache, allowNativeArtifact)
 	if err != nil {
 		ui.Fatal("%v", err)
 	}
 	return module
 }
 
-func loadModule(file string, config *wago.RuntimeConfig, runtime *wago.Runtime, cache artifactcache.Cache, allowNativeArtifact bool) (*wago.Module, error) {
+func loadModule(file string, runtime *wago.Runtime, cache artifactcache.Cache, allowNativeArtifact bool) (*wago.Module, error) {
 	source, artifact, artifactFile, size, err := modulefile.ReadSourceOrOpenArtifact(file)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func loadModule(file string, config *wago.RuntimeConfig, runtime *wago.Runtime, 
 		}
 		return module, nil
 	}
-	module, err := cache.LoadOrCompile(source, config, runtime)
+	module, err := cache.LoadOrCompile(source, runtime)
 	if err != nil {
 		return nil, err
 	}

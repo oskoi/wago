@@ -15,7 +15,7 @@ func TestLoadOrCompileBypassesArtifactsForCompileOnlyTelemetry(t *testing.T) {
 	base := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
 	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
 	seedRuntime := wago.NewRuntime(wago.WithRuntimeConfig(base))
-	seed, err := cache.LoadOrCompile(source, base, seedRuntime)
+	seed, err := cache.LoadOrCompile(source, seedRuntime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestLoadOrCompileBypassesArtifactsForCompileOnlyTelemetry(t *testing.T) {
 			return nil, nil
 		})
 	})
-	module, err := cache.LoadOrCompile(source, telemetry, rt)
+	module, err := cache.LoadOrCompile(source, rt)
 	if err != nil {
 		t.Fatal(err)
 	}

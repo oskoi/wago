@@ -40,6 +40,9 @@ with `v0.1.0-beta.8`; earlier prereleases remain available in the
 
 ### Changed
 
+- Artifact caching is available through the public `artifactcache` package.
+  Its default identity follows the Wago compiler instead of the host application.
+
 - Accept equal canonical GC type IDs before loading subtype intervals in AMD64
   native casts, tests, and branch casts.
 

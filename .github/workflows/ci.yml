@@ -522,7 +522,7 @@ jobs:
         if: matrix.runtime
         env:
           WAGO_SHARED_SCALAR: "0"
-        run: go test -count=1 -tags wago_codegenstats ./src/core/compiler/backend/railshot/... ./src/wago ./cli/runtime/internal/artifactcache
+        run: go test -count=1 -tags wago_codegenstats ./src/core/compiler/backend/railshot/... ./src/wago ./artifactcache
 
       - name: Shared scalar diagnostic tests
         if: matrix.runtime

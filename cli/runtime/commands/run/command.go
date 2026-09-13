@@ -10,11 +10,11 @@ import (
 	"strings"
 
 	"github.com/wago-org/wago"
+	"github.com/wago-org/wago/artifactcache"
 	"github.com/wago-org/wago/cli/internal/command"
 	"github.com/wago-org/wago/cli/internal/settings"
 	"github.com/wago-org/wago/cli/internal/ui"
 	"github.com/wago-org/wago/cli/internal/wasmcall"
-	"github.com/wago-org/wago/cli/runtime/internal/artifactcache"
 )
 
 // Environment supplies only profile-specific flags, optimization knobs, and
@@ -108,7 +108,7 @@ func (cmd implementation) Run(ctx *command.Ctx) {
 		}
 	}
 	runtime := cmd.environment.LoadRuntime(config, positionals)
-	module, err := loadModule(positionals[0], config, runtime, cmd.environment.ArtifactCache(), ctx.Bool("allow-native-artifact"))
+	module, err := loadModule(positionals[0], runtime, cmd.environment.ArtifactCache(), ctx.Bool("allow-native-artifact"))
 	if err != nil {
 		_ = runtime.CloseContext(context.Background())
 		ui.Fatal("%v", err)

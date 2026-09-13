@@ -29,7 +29,7 @@ func BenchmarkCacheGeneration(b *testing.B) {
 				rt := wago.NewRuntime(wago.WithRuntimeConfig(cfg))
 				defer rt.Close()
 				cache := Cache{Dir: b.TempDir(), Identity: []byte("benchmark-cache-generation")}
-				module, err := cache.LoadOrCompile(source, cfg, rt)
+				module, err := cache.LoadOrCompile(source, rt)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -39,7 +39,7 @@ func BenchmarkCacheGeneration(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					module, err := cache.LoadOrCompile(source, cfg, rt)
+					module, err := cache.LoadOrCompile(source, rt)
 					if err != nil {
 						b.Fatal(err)
 					}
