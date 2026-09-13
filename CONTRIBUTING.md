@@ -64,6 +64,7 @@ go test -bench .
 |---|---|
 | `wago.go` | Generated public API facade. It re-exports `src/wago`. |
 | `src/wago` | Public API implementation. |
+| `artifactcache` | Public best-effort native artifact cache. |
 | `internal/genfacade` | Generator for `wago.go`. |
 | `cli/wago` | Build-tagged manager and runtime entry point. |
 | `cli/wago-installer` | Installable `wago-installer` command entry point. |

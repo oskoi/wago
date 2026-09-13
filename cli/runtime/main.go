@@ -108,10 +108,9 @@ func Main(v string) {
 }
 
 // MainWithArtifactCacheIdentity runs the runtime CLI with an explicit build
-// fingerprint for compiled-module cache keys. Generated plugin runtimes use
-// this entry point because their throwaway build module intentionally disables
-// VCS stamping. The identity must change whenever generated code, plugin ABI,
-// dependencies, or other native-output inputs change.
+// fingerprint for compiled-module cache keys. The identity must cover generated
+// code, plugin ABI, dependencies, and other native-output inputs. Generated plugin
+// runtimes use MainWithPluginSet, which supplies the same identity override.
 func MainWithArtifactCacheIdentity(v, identity string) {
 	artifactCacheIdentity = identity
 	Main(v)

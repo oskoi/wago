@@ -133,6 +133,43 @@ Go stack transition for every call. Events are delivered in order after the
 native invocation returns. This is an explicit deferred contract; use a normal
 host function when Wasm must observe the callback's effects immediately.
 
+### Cache compiled artifacts
+
+Import `github.com/wago-org/wago/artifactcache` to reuse regenerable native
+artifacts. Choose a directory that only trusted writers control because it holds
+native code:
+
+```go
+source, err := os.ReadFile("module.wasm")
+if err != nil {
+	panic(err)
+}
+
+rt := wago.NewRuntime()
+defer rt.Close()
+
+cache := artifactcache.Cache{Dir: "/var/lib/my-service/wago-cache"}
+module, err := cache.LoadOrCompile(source, rt)
+if err != nil {
+	panic(err)
+}
+defer module.Close()
+
+instance, err := rt.Instantiate(context.Background(), module)
+if err != nil {
+	panic(err)
+}
+defer instance.Close()
+```
+
+The returned module belongs to the caller. Keep its source bytes unchanged until
+the module closes. Close its instances, then the module, then the runtime. Set
+`ReportError` when a cache publication failure must be recorded.
+
+The default identity follows the Wago module/fork version and Go compiler, not
+changes to the host application. Local, dirty, or unidentified engine builds use
+`dev`; clear their cache after changing Wago itself.
+
 ## Performance
 
 [**View the benchmarks →**](https://wago.sh/#performance)

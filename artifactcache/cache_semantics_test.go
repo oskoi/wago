@@ -18,7 +18,7 @@ func TestLoadOrCompileValidatesDestinationConfigBeforeWarmLookup(t *testing.T) {
 	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
 	valid := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
 	seedRuntime := wago.NewRuntime(wago.WithRuntimeConfig(valid))
-	seed, err := cache.LoadOrCompile(source, valid, seedRuntime)
+	seed, err := cache.LoadOrCompile(source, seedRuntime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestLoadOrCompileValidatesDestinationConfigBeforeWarmLookup(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			rt := wago.NewRuntime(wago.WithRuntimeConfig(test.cfg))
 			defer rt.Close()
-			if _, err := cache.LoadOrCompile(source, valid, rt); err == nil || !strings.Contains(err.Error(), test.want) {
+			if _, err := cache.LoadOrCompile(source, rt); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("LoadOrCompile error = %v, want substring %q", err, test.want)
 			}
 		})
@@ -58,7 +58,7 @@ func TestLoadOrCompileValidatesUnsupportedBMI2BeforeWarmLookup(t *testing.T) {
 	}
 	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
 	seedRuntime := wago.NewRuntime(wago.WithRuntimeConfig(base))
-	seed, err := cache.LoadOrCompile(constantModule(), base, seedRuntime)
+	seed, err := cache.LoadOrCompile(constantModule(), seedRuntime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestLoadOrCompileValidatesUnsupportedBMI2BeforeWarmLookup(t *testing.T) {
 
 	rt := wago.NewRuntime(wago.WithRuntimeConfig(unsupported))
 	defer rt.Close()
-	if _, err := cache.LoadOrCompile(constantModule(), base, rt); err == nil || !strings.Contains(err.Error(), "requires BMI2") {
+	if _, err := cache.LoadOrCompile(constantModule(), rt); err == nil || !strings.Contains(err.Error(), "requires BMI2") {
 		t.Fatalf("LoadOrCompile BMI2 error = %v", err)
 	}
 }
@@ -107,7 +107,7 @@ func TestLoadOrCompileTransformGenerationsCannotReuseWrongCode(t *testing.T) {
 				return append([]byte(nil), transformed...), nil
 			})
 		})
-		mod, err := cache.LoadOrCompile(input, cfg, rt)
+		mod, err := cache.LoadOrCompile(input, rt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,7 +140,7 @@ func TestLoadOrCompileWarmHitRunsCompileObserver(t *testing.T) {
 	cfg := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
 	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
 	seedRuntime := wago.NewRuntime(wago.WithRuntimeConfig(cfg))
-	seed, err := cache.LoadOrCompile(source, cfg, seedRuntime)
+	seed, err := cache.LoadOrCompile(source, seedRuntime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestLoadOrCompileWarmHitRunsCompileObserver(t *testing.T) {
 			}
 		})
 	})
-	mod, err := cache.LoadOrCompile(source, cfg, rt)
+	mod, err := cache.LoadOrCompile(source, rt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestLoadOrCompileCustomInstructionsAreNonCacheable(t *testing.T) {
 		})
 	})
 	for range 2 {
-		mod, err := cache.LoadOrCompile(source, cfg, rt)
+		mod, err := cache.LoadOrCompile(source, rt)
 		if err != nil {
 			t.Fatal(err)
 		}
