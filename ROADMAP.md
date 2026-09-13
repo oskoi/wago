@@ -312,9 +312,11 @@ Current tracks:
   harness remains zero-skip at 1,600 modules / 48,248 assertions.
 - [ ] `call_indirect` inline caches behind a table epoch
 - [x] `.wago` productization: `wago build` creates explicit artifacts and
-  `wago run` reuses an automatic cache keyed by the module, exact runtime
-  executable, GOOS/GOARCH, effective feature/bounds/memory configuration, and
-  optimization knobs. `wago cache` owns inspection, pruning, and cleanup.
+  `wago run` reuses an automatic best-effort cache keyed by module source,
+  compiler identity (the Wago compiler's resolved module path/version and Go
+  compiler version), GOOS/GOARCH, effective feature/bounds/memory configuration,
+  and optimization knobs. The cache directory is caller-controlled and trusted;
+  reset it manually when the engine changes.
 - [x] Runtime-only standalone commands: `wago compile` precompiles the reviewed
   module/plugin graph into a native `.wago` artifact and embeds it in a
   `wago_precompiled` loader, retaining no Railshot source compiler. `--tinygo`

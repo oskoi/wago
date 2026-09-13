@@ -54,8 +54,13 @@ with `v0.1.0-beta.8`; earlier prereleases remain available in the
   branch patching, Windows cleanup behavior, semantic-version prerelease
   ranges, build output aliasing, and installer fallback behavior.
 
+- Artifact caching is now available through the public `artifactcache` package.
+  Its default identity follows the Wago compiler instead of the host application.
+
 ### Fixed
 
+- Warm artifact adoption now enforces source-size and native-code quotas using
+  the same resource-limit errors as compilation.
 - Imported start functions now receive the instantiation context's cancellation
   and deadline through callback-scoped contexts. Startup traps preserve their
   original errors.

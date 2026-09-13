@@ -270,6 +270,7 @@ src/wago/                         public API implementation (package wago)
   reference_lifetime.go           close/quiescence/root-transfer convergence
   import_attachments.go           imported owner attachment and root retention
 wago.go                           generated root facade (re-exports src/wago)
+artifactcache/                    public best-effort native artifact cache
 internal/genfacade/               generator for wago.go (+ up-to-date test)
 cli/wago/                         manager and runtime command entry point
 cli/wago-installer/               installer command entry point
@@ -449,6 +450,28 @@ binding-independent imported-call shape, so modules with function imports can be
 serialized before host or instance targets are known; live addresses and store
 identity are installed only during instantiation. See the codec-version comment
 at the top of this file for the current wire version.
+
+### Artifact cache
+
+`artifactcache.Cache` stores regenerable native artifacts in a directory chosen
+and trusted by its caller. It reads and publishes artifacts on a best-effort
+basis: an unreadable or invalid cached artifact is a miss, and a publication
+failure does not change the returned module. Source compilation and adoption
+errors remain errors; a hit still enforces source-size, native-code, and snapshot
+metadata quotas. `ReportError` observes publication failures. A compiler generation
+marked non-cacheable bypasses reuse. Cache entries retain key format 5 and artifact
+codec version 2.
+
+Each key includes the source, target, and compiler-relevant runtime configuration. With
+no explicit `Cache.Identity`, the compiler identity includes the resolved canonical
+Wago compiler module path and version plus its `GoVersion` (the Go compiler
+version). A versioned fork replacement contributes its replacement path and
+version. Local, dirty, unversioned, or missing engine metadata uses `dev`; reset the
+caller-owned directory manually when the engine changes. This default intentionally
+ignores the host application's main-module version, VCS revision, dirty state,
+dependencies, and build settings. A dirty host application does not disable reuse.
+Embedders can set `Identity` for their own compiler identity. Generated CLI
+profiles set that field from their generated artifact-cache identity.
 
 ---
 

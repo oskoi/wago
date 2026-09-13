@@ -647,7 +647,8 @@ func (p *PreparedCompile) Compile() (*Module, error) {
 }
 
 // Adopt binds a freshly decoded artifact to this preparation and transfers its
-// ownership. A failed adoption closes the artifact exactly once.
+// ownership. Source, native-code, and memory quotas apply as they do to compilation.
+// A failed adoption closes the artifact exactly once.
 func (p *PreparedCompile) Adopt(c *Compiled) (*Module, error) {
 	if err := p.consume(); err != nil {
 		if c != nil {
@@ -658,6 +659,13 @@ func (p *PreparedCompile) Adopt(c *Compiled) (*Module, error) {
 	defer p.finish()
 	if c == nil {
 		return nil, fmt.Errorf("wago: nil compiled artifact")
+	}
+	if limit := p.cfg.maxModuleBytes; limit != 0 && uint64(len(p.source)) > limit {
+		err := &coreruntime.ResourceLimitError{
+			Resource: "module bytes", Scope: "compile",
+			Requested: uint64(len(p.source)), Limit: limit,
+		}
+		return nil, emitCompileError(p.hooks, p.compilation, joinPrimary(err, c.Close()))
 	}
 	if err := checkArtifactAdmissionLimits(c, p.cfg.maxNativeCodeBytes, p.cfg.maxMemoriesPerModule); err != nil {
 		return nil, emitCompileError(p.hooks, p.compilation, joinPrimary(err, c.Close()))

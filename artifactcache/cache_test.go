@@ -25,10 +25,11 @@ func TestLoadOrCompileCachesAndRepairsArtifact(t *testing.T) {
 	rt := wago.NewRuntime(wago.WithRuntimeConfig(config))
 	defer rt.Close()
 
-	first, err := cache.LoadOrCompile(source, config, rt)
+	first, err := cache.LoadOrCompile(source, rt)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer first.Close()
 	if first.Compiled().Exports["answer"] != 0 {
 		t.Fatalf("unexpected exports: %#v", first.Compiled().Exports)
 	}
@@ -47,9 +48,11 @@ func TestLoadOrCompileCachesAndRepairsArtifact(t *testing.T) {
 	if err := os.WriteFile(path, []byte("corrupt"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cache.LoadOrCompile(source, config, rt); err != nil {
+	recompiled, err := cache.LoadOrCompile(source, rt)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer recompiled.Close()
 	repaired, err := os.ReadFile(path)
 	if err != nil || !wago.IsCompiled(repaired) {
 		t.Fatalf("corrupt cache was not repaired: compiled=%v err=%v", wago.IsCompiled(repaired), err)
@@ -165,10 +168,11 @@ func TestLoadOrCompileReportsPublicationFailure(t *testing.T) {
 	publishArtifact = func(string, *wago.Compiled) error { return injected }
 	t.Cleanup(func() { publishArtifact = oldPublish })
 
-	module, err := cache.LoadOrCompile(source, config, rt)
+	module, err := cache.LoadOrCompile(source, rt)
 	if err != nil || module == nil {
 		t.Fatalf("LoadOrCompile = %v, %v", module, err)
 	}
+	defer module.Close()
 	if !errors.Is(reported, injected) {
 		t.Fatalf("reported error = %v", reported)
 	}
@@ -208,7 +212,7 @@ func TestCacheHitPropagatesAfterCompileErrorExactlyOnce(t *testing.T) {
 	config := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
 	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
 	seedRuntime := wago.NewRuntime(wago.WithRuntimeConfig(config))
-	module, err := cache.LoadOrCompile(source, config, seedRuntime)
+	module, err := cache.LoadOrCompile(source, seedRuntime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +241,7 @@ func TestCacheHitPropagatesAfterCompileErrorExactlyOnce(t *testing.T) {
 			}
 		})
 	})
-	if _, err := cache.LoadOrCompile(source, config, rt); !errors.Is(err, rejected) {
+	if _, err := cache.LoadOrCompile(source, rt); !errors.Is(err, rejected) {
 		t.Fatalf("cache binding error = %v, want %v", err, rejected)
 	}
 	if calls != 1 {
@@ -250,7 +254,7 @@ func TestCacheHitPropagatesRuntimeBindingError(t *testing.T) {
 	config := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
 	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
 	seedRuntime := wago.NewRuntime(wago.WithRuntimeConfig(config))
-	module, err := cache.LoadOrCompile(source, config, seedRuntime)
+	module, err := cache.LoadOrCompile(source, seedRuntime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,41 +269,8 @@ func TestCacheHitPropagatesRuntimeBindingError(t *testing.T) {
 	if err := closedRuntime.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cache.LoadOrCompile(source, config, closedRuntime); err == nil || !strings.Contains(err.Error(), "closed runtime") {
+	if _, err := cache.LoadOrCompile(source, closedRuntime); err == nil || !strings.Contains(err.Error(), "closed runtime") {
 		t.Fatalf("cache binding error = %v", err)
-	}
-}
-
-func TestLoadOrCompileUsesDestinationRuntimeConfig(t *testing.T) {
-	source := constantModule()
-	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
-	runtimeConfig := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
-	callerConfig := runtimeConfig.WithMaxFunctionLocals(runtimeConfig.MaxFunctionLocals() - 1)
-	callerPath, ok := cache.path(source, callerConfig)
-	if !ok {
-		t.Fatal("caller cache key unavailable")
-	}
-	runtimePath, ok := cache.path(source, runtimeConfig)
-	if !ok || runtimePath == callerPath {
-		t.Fatalf("runtime cache key = %q, caller key = %q", runtimePath, callerPath)
-	}
-
-	rt := wago.NewRuntime(wago.WithRuntimeConfig(runtimeConfig))
-	module, err := cache.LoadOrCompile(source, callerConfig, rt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := module.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := rt.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(runtimePath); err != nil {
-		t.Fatalf("runtime-config artifact was not published: %v", err)
-	}
-	if _, err := os.Stat(callerPath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("mismatched caller-config artifact exists: %v", err)
 	}
 }
 
@@ -308,7 +279,7 @@ func TestLoadOrCompileBypassesArtifactsForCompileOnlyTelemetry(t *testing.T) {
 	base := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
 	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
 	seedRuntime := wago.NewRuntime(wago.WithRuntimeConfig(base))
-	seed, err := cache.LoadOrCompile(source, base, seedRuntime)
+	seed, err := cache.LoadOrCompile(source, seedRuntime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,26 +291,10 @@ func TestLoadOrCompileBypassesArtifactsForCompileOnlyTelemetry(t *testing.T) {
 	}
 
 	telemetry := base.WithGCCodeTelemetry(true)
-	var compileCalls int
 	rt := wago.NewRuntime(wago.WithRuntimeConfig(telemetry))
-	loadCachePlugin(t, rt, "example.com/cache/telemetry", []wago.AuthorityRequest{{
-		Name: wago.AuthorityModuleSourceTransform, Mode: wago.AuthorityRequired, Reason: "count fresh compiles",
-	}}, func(reg *wago.Registrar) error {
-		transformer, err := reg.ModuleSourceTransformer()
-		if err != nil {
-			return err
-		}
-		return transformer.Transform(func(wago.ModuleSourceContext, []byte) ([]byte, error) {
-			compileCalls++
-			return nil, nil
-		})
-	})
-	module, err := cache.LoadOrCompile(source, telemetry, rt)
+	module, err := cache.LoadOrCompile(source, rt)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if compileCalls != 1 {
-		t.Fatalf("compile-only telemetry used a warm artifact; compile calls = %d", compileCalls)
 	}
 	if _, ok := module.Compiled().GCNativeCodeTelemetry(); !ok {
 		t.Fatal("fresh telemetry compile did not retain requested attribution")
@@ -353,9 +308,6 @@ func TestLoadOrCompileBypassesArtifactsForCompileOnlyTelemetry(t *testing.T) {
 }
 
 func TestCacheKeyIncludesRuntimeAndCompilerConfiguration(t *testing.T) {
-	if cacheKeyFormat != 5 {
-		t.Fatalf("cache key format = %d, want runtime-memory-quota-independent version 5", cacheKeyFormat)
-	}
 	source := constantModule()
 	dir := t.TempDir()
 	base := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
@@ -435,7 +387,7 @@ func TestCachedArtifactCannotBypassStricterMemoryPageQuota(t *testing.T) {
 	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
 	unlimited := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
 	seed := wago.NewRuntime(wago.WithRuntimeConfig(unlimited))
-	mod, err := cache.LoadOrCompile(source, unlimited, seed)
+	mod, err := cache.LoadOrCompile(source, seed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +401,7 @@ func TestCachedArtifactCannotBypassStricterMemoryPageQuota(t *testing.T) {
 	strict := unlimited.WithMemoryLimitPages(1)
 	rt := wago.NewRuntime(wago.WithRuntimeConfig(strict))
 	defer rt.Close()
-	mod, err = cache.LoadOrCompile(source, strict, rt)
+	mod, err = cache.LoadOrCompile(source, rt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,103 +417,235 @@ func TestCachedArtifactCannotBypassStricterMemoryPageQuota(t *testing.T) {
 	}
 }
 
-func TestBuildIdentityRequiresStableSourceIdentity(t *testing.T) {
-	clean := &debug.BuildInfo{
-		GoVersion: "go1.25.0",
-		Path:      "github.com/wago-org/wago/cli/wago",
-		Main:      debug.Module{Path: "github.com/wago-org/wago", Version: "(devel)"},
-		Settings: []debug.BuildSetting{
-			{Key: "GOARCH", Value: "amd64"},
-			{Key: "vcs.revision", Value: "0123456789abcdef"},
-			{Key: "vcs.modified", Value: "false"},
-		},
+func requireCacheResourceLimit(t *testing.T, cache Cache, source []byte, rt *wago.Runtime, resource string, requested, limit uint64) {
+	t.Helper()
+	module, err := cache.LoadOrCompile(source, rt)
+	if module != nil || !errors.Is(err, wago.ErrResourceLimit) {
+		if module != nil {
+			_ = module.Close()
+		}
+		t.Fatalf("cache resource limit = %v, %v; want %s resource limit", module, err, resource)
 	}
-	first, ok := buildIdentity(clean)
+	var limitErr *wago.ResourceLimitError
+	if !errors.As(err, &limitErr) || limitErr.Resource != resource || limitErr.Scope != "compile" || limitErr.Requested != requested || limitErr.Limit != limit {
+		t.Fatalf("cache resource limit = %#v; want %s requested=%d limit=%d", err, resource, requested, limit)
+	}
+}
+
+func TestCachedArtifactCannotBypassStricterNativeCodeQuota(t *testing.T) {
+	source := constantModule()
+	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
+	base := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
+	seed := wago.NewRuntime(wago.WithRuntimeConfig(base))
+	seedModule, err := cache.LoadOrCompile(source, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codeBytes := seedModule.Compiled().CodeSize()
+	if err := seedModule.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if codeBytes < 2 {
+		t.Fatalf("quota fixture native code bytes = %d", codeBytes)
+	}
+
+	strict := base.WithMaxNativeCodeBytes(uint64(codeBytes - 1))
+	seedPath, ok := cache.path(source, base)
 	if !ok {
-		t.Fatal("clean VCS build identity was rejected")
+		t.Fatal("seed cache key unavailable")
 	}
-	copyInfo := *clean
-	copyInfo.Settings = append([]debug.BuildSetting(nil), clean.Settings...)
-	second, ok := buildIdentity(&copyInfo)
-	if !ok || first != second {
-		t.Fatal("identical build metadata did not produce a stable identity")
+	strictPath, ok := cache.path(source, strict)
+	if !ok || strictPath != seedPath {
+		t.Fatalf("strict cache key = %q, want warm key %q", strictPath, seedPath)
 	}
-	copyInfo.Settings[1].Value = "fedcba9876543210"
-	changed, ok := buildIdentity(&copyInfo)
-	if !ok || first == changed {
-		t.Fatal("source revision did not change build identity")
-	}
-	copyInfo.Settings[2].Value = "true"
-	if _, ok := buildIdentity(&copyInfo); ok {
-		t.Fatal("dirty VCS build produced a reusable identity")
-	}
-	if _, ok := buildIdentity(&debug.BuildInfo{Main: debug.Module{Version: "(devel)"}}); ok {
-		t.Fatal("unstamped development build produced a reusable identity")
-	}
-	missingCleanState := *clean
-	missingCleanState.Settings = missingCleanState.Settings[:2]
-	if _, ok := buildIdentity(&missingCleanState); ok {
-		t.Fatal("development build without an explicit clean-tree state produced a reusable identity")
-	}
-}
-
-func TestBuildIdentityAcceptsVersionedModule(t *testing.T) {
-	info := &debug.BuildInfo{
-		GoVersion: "go1.25.0",
-		Main: debug.Module{
-			Path:    "example.com/custom-wago",
-			Version: "v1.2.3",
-			Sum:     "h1:module-sum",
-		},
-	}
-	if _, ok := buildIdentity(info); !ok {
-		t.Fatal("versioned module identity was rejected")
-	}
-}
-
-func TestBuildIdentityRejectsMutableDependencies(t *testing.T) {
-	base := debug.BuildInfo{
-		GoVersion: "go1.25.0",
-		Path:      "github.com/wago-org/wago/cli/wago",
-		Main:      debug.Module{Path: "github.com/wago-org/wago", Version: "(devel)"},
-		Settings: []debug.BuildSetting{
-			{Key: "vcs.revision", Value: "0123456789abcdef"},
-			{Key: "vcs.modified", Value: "false"},
-		},
-	}
-	immutable := debug.Module{Path: "example.com/plugin", Version: "v1.2.3", Sum: "h1:plugin-sum"}
-	base.Deps = []*debug.Module{&immutable}
-	if _, ok := buildIdentity(&base); !ok {
-		t.Fatal("checksummed dependency was rejected")
-	}
-
-	tests := []struct {
-		name string
-		dep  *debug.Module
+	for _, test := range []struct {
+		name  string
+		cache Cache
 	}{
-		{name: "nil record", dep: nil},
-		{name: "missing checksum", dep: &debug.Module{Path: "example.com/plugin", Version: "v1.2.3"}},
-		{name: "development version", dep: &debug.Module{Path: "example.com/plugin", Version: "(devel)", Sum: "h1:plugin-sum"}},
-		{name: "filesystem replacement", dep: &debug.Module{
-			Path: "example.com/plugin", Version: "v1.2.3", Sum: "h1:plugin-sum",
-			Replace: &debug.Module{Path: "/work/plugin"},
-		}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			info := base
-			info.Deps = []*debug.Module{tc.dep}
-			if _, ok := buildIdentity(&info); ok {
-				t.Fatal("mutable dependency produced a reusable identity")
-			}
+		{name: "cold", cache: Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}},
+		{name: "warm", cache: cache},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			rt := wago.NewRuntime(wago.WithRuntimeConfig(strict))
+			defer rt.Close()
+			requireCacheResourceLimit(t, test.cache, source, rt, "native code bytes", uint64(codeBytes), uint64(codeBytes-1))
 		})
 	}
 
-	versionedReplacement := immutable
-	versionedReplacement.Replace = &debug.Module{Path: "example.com/plugin-fork", Version: "v1.2.4", Sum: "h1:fork-sum"}
-	base.Deps = []*debug.Module{&versionedReplacement}
-	if _, ok := buildIdentity(&base); !ok {
-		t.Fatal("checksummed module replacement was rejected")
+	exact := base.WithMaxNativeCodeBytes(uint64(codeBytes))
+	rt := wago.NewRuntime(wago.WithRuntimeConfig(exact))
+	defer rt.Close()
+	module, err := cache.LoadOrCompile(source, rt)
+	if err != nil || module == nil {
+		t.Fatalf("exact native-code quota = %v, %v", module, err)
+	}
+	defer module.Close()
+}
+
+func TestCachedArtifactCannotBypassStricterModuleByteQuota(t *testing.T) {
+	source := constantModule()
+	cache := Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}
+	base := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
+	seed := wago.NewRuntime(wago.WithRuntimeConfig(base))
+	module, err := cache.LoadOrCompile(source, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := module.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	bytes := uint64(len(source))
+	strict := base.WithMaxModuleBytes(bytes - 1)
+	seedPath, ok := cache.path(source, base)
+	if !ok {
+		t.Fatal("seed cache key unavailable")
+	}
+	strictPath, ok := cache.path(source, strict)
+	if !ok || strictPath != seedPath {
+		t.Fatalf("strict cache key = %q, want warm key %q", strictPath, seedPath)
+	}
+	for _, test := range []struct {
+		name  string
+		cache Cache
+	}{
+		{name: "cold", cache: Cache{Dir: t.TempDir(), Identity: []byte("runtime-a")}},
+		{name: "warm", cache: cache},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			rt := wago.NewRuntime(wago.WithRuntimeConfig(strict))
+			defer rt.Close()
+			requireCacheResourceLimit(t, test.cache, source, rt, "module bytes", bytes, bytes-1)
+		})
+	}
+
+	exact := base.WithMaxModuleBytes(bytes)
+	rt := wago.NewRuntime(wago.WithRuntimeConfig(exact))
+	defer rt.Close()
+	module, err = cache.LoadOrCompile(source, rt)
+	if err != nil || module == nil {
+		t.Fatalf("exact module-byte quota = %v, %v", module, err)
+	}
+	defer module.Close()
+}
+
+func TestBuildIdentityIgnoresEmbeddingApplicationMetadata(t *testing.T) {
+	base := &debug.BuildInfo{
+		GoVersion: "go1.25.0",
+		Path:      "example.com/embed",
+		Main:      debug.Module{Path: "example.com/embed", Version: "v1.0.0", Sum: "h1:embed"},
+		Deps: []*debug.Module{
+			{Path: wagoModulePath, Version: "v1.2.3", Sum: "h1:wago"},
+			{Path: "example.com/extension", Version: "v1.0.0", Sum: "h1:extension"},
+		},
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "0123456789abcdef"},
+			{Key: "vcs.modified", Value: "false"},
+			{Key: "-tags", Value: "release"},
+		},
+	}
+	want := buildIdentity(base)
+
+	changed := *base
+	changed.Path = "example.com/another/embed"
+	changed.Main = debug.Module{Path: "example.com/another/embed", Version: "v9.9.9", Sum: "h1:another-embed"}
+	changed.Deps = []*debug.Module{
+		{Path: wagoModulePath, Version: "v1.2.3", Sum: "h1:other-wago"},
+		{Path: "example.com/local-extension", Version: "(devel)"},
+	}
+	changed.Settings = []debug.BuildSetting{
+		{Key: "vcs.revision", Value: "fedcba9876543210"},
+		{Key: "vcs.modified", Value: "true"},
+		{Key: "GOAMD64", Value: "v4"},
+		{Key: "-trimpath", Value: "true"},
+	}
+	if got := buildIdentity(&changed); got != want {
+		t.Fatal("embedding application metadata changed compiler identity")
+	}
+}
+
+func TestBuildIdentitySeparatesCompilerVersionsAndForks(t *testing.T) {
+	identity := func(goVersion string, module debug.Module) [sha256.Size]byte {
+		return buildIdentity(&debug.BuildInfo{GoVersion: goVersion, Deps: []*debug.Module{&module}})
+	}
+	canonical := debug.Module{Path: wagoModulePath, Version: "v1.2.3", Sum: "h1:wago"}
+	want := identity("go1.25.0", canonical)
+
+	if got := identity("go1.25.0", debug.Module{Path: wagoModulePath, Version: "v1.2.4", Sum: "h1:wago-next"}); got == want {
+		t.Fatal("Wago module version did not change compiler identity")
+	}
+	if got := identity("go1.26.0", canonical); got == want {
+		t.Fatal("Go compiler version did not change compiler identity")
+	}
+
+	fork := debug.Module{
+		Path: wagoModulePath, Version: "v0.9.0", Sum: "h1:required-wago",
+		Replace: &debug.Module{Path: "example.com/fork/wago", Version: "v1.2.3", Sum: "h1:fork"},
+	}
+	forkIdentity := identity("go1.25.0", fork)
+	sameFork := fork
+	sameFork.Version = "v9.9.9"
+	sameFork.Sum = "h1:other-required-wago"
+	if got := identity("go1.25.0", sameFork); got != forkIdentity {
+		t.Fatal("versioned replacement used the original required version")
+	}
+	fork.Replace = &debug.Module{Path: "example.com/other-fork/wago", Version: "v1.2.3", Sum: "h1:fork"}
+	if got := identity("go1.25.0", fork); got == forkIdentity {
+		t.Fatal("fork module path did not change compiler identity")
+	}
+	fork.Replace = &debug.Module{Path: "example.com/fork/wago", Version: "v1.2.4", Sum: "h1:fork-next"}
+	if got := identity("go1.25.0", fork); got == forkIdentity {
+		t.Fatal("fork module version did not change compiler identity")
+	}
+}
+
+func TestBuildIdentityNormalizesDevelopmentEngine(t *testing.T) {
+	const goVersion = "go1.25.0"
+	identity := func(module *debug.Module) [sha256.Size]byte {
+		info := &debug.BuildInfo{GoVersion: goVersion}
+		if module != nil {
+			info.Deps = []*debug.Module{module}
+		}
+		return buildIdentity(info)
+	}
+	dev := identity(nil)
+	cases := []struct {
+		name   string
+		module *debug.Module
+	}{
+		{name: "missing engine", module: &debug.Module{Path: "example.com/other", Version: "v1.0.0"}},
+		{name: "empty engine version", module: &debug.Module{Path: wagoModulePath}},
+		{name: "development engine version", module: &debug.Module{Path: wagoModulePath, Version: "(devel)"}},
+		{name: "dirty compiler version", module: &debug.Module{Path: wagoModulePath, Version: "v0.0.0-20260912185342-781ea39a3915+dirty"}},
+		{name: "first local replacement", module: &debug.Module{
+			Path: wagoModulePath, Version: "v1.2.3", Replace: &debug.Module{Path: "../first-wago"},
+		}},
+		{name: "second local replacement", module: &debug.Module{
+			Path: wagoModulePath, Version: "v9.9.9", Replace: &debug.Module{Path: "/work/second-wago"},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := identity(tc.module); got != dev {
+				t.Fatal("development engine did not use the shared development identity")
+			}
+		})
+	}
+	dirtyMain := &debug.BuildInfo{
+		GoVersion: goVersion,
+		Main:      debug.Module{Path: wagoModulePath, Version: "v0.0.0-20260912185342-781ea39a3915+dirty"},
+	}
+	if got := buildIdentity(dirtyMain); got != dev {
+		t.Fatal("dirty compiler main module did not use the shared development identity")
+	}
+	if got, want := buildIdentity(nil), buildIdentity(&debug.BuildInfo{GoVersion: runtime.Version()}); got != want {
+		t.Fatal("missing Go build metadata did not fall back to runtime version")
 	}
 }
 
@@ -588,10 +672,7 @@ func BenchmarkCachePath(b *testing.B) {
 }
 
 func legacyCachePath(cache Cache, source []byte, config *wago.RuntimeConfig) (string, bool) {
-	identity, ok := cache.runtimeIdentity()
-	if !ok {
-		return "", false
-	}
+	identity := cache.runtimeIdentity()
 	type knob struct {
 		Name string `json:"name"`
 		On   bool   `json:"on"`

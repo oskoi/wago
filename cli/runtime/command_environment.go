@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 
 	"github.com/wago-org/wago"
+	"github.com/wago-org/wago/artifactcache"
 	"github.com/wago-org/wago/cli/internal/command"
-	"github.com/wago-org/wago/cli/runtime/internal/artifactcache"
 	runtimeplugin "github.com/wago-org/wago/cli/runtime/internal/plugin"
 	"github.com/wago-org/wago/internal/wagopaths"
 )

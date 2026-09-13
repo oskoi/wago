@@ -54,7 +54,7 @@ func TestLoadOrCompileReusesArtifactAcrossWorkerPolicies(t *testing.T) {
 	base := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
 	for _, workers := range policies {
 		rt := wago.NewRuntime(wago.WithRuntimeConfig(base.WithFunctionWorkers(workers)))
-		module, err := cache.LoadOrCompile(source, base, rt)
+		module, err := cache.LoadOrCompile(source, rt)
 		if err != nil {
 			t.Fatalf("workers %d: %v", workers, err)
 		}
@@ -75,7 +75,7 @@ func TestLoadOrCompileReusesArtifactAcrossProcess(t *testing.T) {
 	config := wago.NewRuntimeConfig().WithBoundsChecks(wago.BoundsChecksExplicit)
 	cache := Cache{Dir: t.TempDir(), Identity: []byte("cross-process")}
 	rt := wago.NewRuntime(wago.WithRuntimeConfig(config))
-	module, err := cache.LoadOrCompile(constantModule(), config, rt)
+	module, err := cache.LoadOrCompile(constantModule(), rt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestArtifactCacheSubprocessHelper(t *testing.T) {
 		t.Fatalf("warm artifact unavailable: %v", err)
 	}
 	rt := wago.NewRuntime(wago.WithRuntimeConfig(config))
-	module, err := cache.LoadOrCompile(constantModule(), config, rt)
+	module, err := cache.LoadOrCompile(constantModule(), rt)
 	if err != nil {
 		t.Fatal(err)
 	}

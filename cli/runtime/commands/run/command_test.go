@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	"github.com/wago-org/wago"
+	"github.com/wago-org/wago/artifactcache"
 	"github.com/wago-org/wago/cli/internal/command"
 	"github.com/wago-org/wago/cli/internal/settings"
-	"github.com/wago-org/wago/cli/runtime/internal/artifactcache"
 )
 
 type testEnvironment struct{}
@@ -254,8 +254,7 @@ func TestLoadModuleAndResolveExport(t *testing.T) {
 	}
 	rt := wago.NewRuntime()
 	defer rt.Close()
-	config := wago.NewRuntimeConfig()
-	mod := mustLoadModule(path, config, rt, artifactcache.Cache{}, false)
+	mod := mustLoadModule(path, rt, artifactcache.Cache{}, false)
 	if got := mustResolveExport(mod.Compiled(), ""); got != "f" {
 		t.Fatalf("default export = %q", got)
 	}
@@ -270,10 +269,10 @@ func TestLoadModuleAndResolveExport(t *testing.T) {
 	if err := os.WriteFile(compiledPath, encoded, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if mod, err := loadModule(compiledPath, config, rt, artifactcache.Cache{}, false); err == nil || mod != nil || !strings.Contains(err.Error(), "--allow-native-artifact") {
+	if mod, err := loadModule(compiledPath, rt, artifactcache.Cache{}, false); err == nil || mod != nil || !strings.Contains(err.Error(), "--allow-native-artifact") {
 		t.Fatalf("untrusted artifact load = %v, %v; want explicit opt-in", mod, err)
 	}
-	if got := mustResolveExport(mustLoadModule(compiledPath, config, rt, artifactcache.Cache{}, true).Compiled(), "f"); got != "f" {
+	if got := mustResolveExport(mustLoadModule(compiledPath, rt, artifactcache.Cache{}, true).Compiled(), "f"); got != "f" {
 		t.Fatalf("loaded export = %q", got)
 	}
 }
