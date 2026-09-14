@@ -261,11 +261,11 @@ func (j *JobMemory) LinMemBase() uintptr {
 // guard ([linMem - 72]).
 func (j *JobMemory) SetStackFence(v uintptr) { j.putU64(offStackFence, uint64(v)) }
 
-// BindTrapCell installs the stable trap-buffer pointer used by native trap
-// stubs and establishes the zero-on-entry invariant required by
-// Engine.CallPrepared. Native trap stubs write through byte 23, so the caller
-// must provide TrapBufferBytes stable off-heap bytes for all native calls
-// (Arena-backed instance buffers satisfy this).
+// BindTrapCell initializes a fresh trap buffer and installs its native pointer.
+// Call it before cancellation can access the buffer. Active invocation entry
+// and restoration use RebindTrapCell to preserve pending interruption. Native
+// trap stubs write through byte 23, so trap must contain TrapBufferBytes stable
+// off-heap bytes (Arena-backed instance buffers satisfy this).
 func (j *JobMemory) BindTrapCell(trap []byte) error {
 	if err := validateTrapBuffer(trap); err != nil {
 		return err

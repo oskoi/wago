@@ -5,7 +5,8 @@ import wruntime "github.com/wago-org/wago/src/core/runtime"
 // refreshNativeControl re-establishes the per-invocation basedata fields that a
 // cross-instance native call temporarily replaces in its callee. Prepared calls
 // normally bind these once, but that assumption stops being true as soon as an
-// instance is entered from another instance's execution stack.
+// instance is entered from another instance's execution stack. A pending
+// interruption belongs to the active call and must survive this refresh.
 func refreshNativeControl(shared bool, eng *wruntime.Engine, jm *wruntime.JobMemory, trap []byte) error {
 	if !shared {
 		return nil
@@ -14,5 +15,5 @@ func refreshNativeControl(shared bool, eng *wruntime.Engine, jm *wruntime.JobMem
 		return nil
 	}
 	jm.SetStackFence(eng.StackLimit())
-	return jm.BindTrapCell(trap)
+	return jm.RebindTrapCell(trap)
 }

@@ -13,6 +13,11 @@ custom XMM values use a separate register bank, even when register numbers match
 Context-aware invocation checks cancellation after it acquires the instance
 gate, before it reads export metadata or enters guest or host code.
 
+[Fresh trap binding](src/core/runtime/basedata.go) initializes buffers before
+cancellation can access them. [Synchronous entry](src/wago/hostcall.go) and
+[shared-control refresh](src/wago/call_control.go) rebind active buffers without
+clearing a pending interruption.
+
 [Runtime instantiation](src/wago/runtime.go) carries its context through local and imported start
 functions. Local starts use the normal native cancellation mechanism. Host
 callbacks receive callback-scoped cancellation and deadlines without context

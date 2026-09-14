@@ -23,6 +23,8 @@ with `v0.1.0-beta.8`; earlier prereleases remain available in the
 
 ### Fixed
 
+- Synchronous native entry and shared-control refresh now preserve pending
+  cancellation instead of racing with or clearing the active trap cell.
 - Warm artifact adoption now enforces source-size and native-code quotas using
   the same resource-limit errors as compilation.
 - Imported start functions now receive the instantiation context's cancellation
