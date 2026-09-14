@@ -6,6 +6,24 @@ with `v0.1.0-beta.8`; earlier prereleases remain available in the
 
 ## [Unreleased]
 
+### Changed
+
+- Artifact caching is available through the public `artifactcache` package.
+  Its default identity follows the Wago compiler instead of the host application.
+
+### Fixed
+
+- Shared-control refresh preserves pending cancellation instead of clearing
+  the active trap cell.
+- Warm artifact adoption enforces source-size quotas using the same
+  resource-limit errors as compilation.
+- Imported start functions receive the instantiation context's cancellation
+  and deadline through callback-scoped contexts. Startup traps preserve their
+  original errors.
+- Native artifacts retain local and imported start functions and run them
+  for each new instance. Artifact version 2 and metadata section ID 2 remain
+  unchanged.
+
 ## [v0.1.0-beta.9] - 2026-09-16
 
 ### Added
@@ -53,20 +71,6 @@ with `v0.1.0-beta.8`; earlier prereleases remain available in the
 - Correct Core 3 validation and name decoding, ARM64 register allocation and
   branch patching, Windows cleanup behavior, semantic-version prerelease
   ranges, build output aliasing, and installer fallback behavior.
-
-- Artifact caching is now available through the public `artifactcache` package.
-  Its default identity follows the Wago compiler instead of the host application.
-
-### Fixed
-
-- Warm artifact adoption now enforces source-size and native-code quotas using
-  the same resource-limit errors as compilation.
-- Imported start functions now receive the instantiation context's cancellation
-  and deadline through callback-scoped contexts. Startup traps preserve their
-  original errors.
-- Native artifacts now retain local and imported start functions and run them
-  for each new instance. Artifact version 2 and metadata section ID 2 remain
-  unchanged.
 
 ## [v0.1.0-beta.8] - 2026-09-10
 
