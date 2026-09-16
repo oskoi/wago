@@ -532,6 +532,15 @@ straight-line region; every may-collect, host-reentry, control/EH, tail, local-w
 or unknown edge invalidates it before lowering. Native allocation reserves identities
 only; collection cancels unused reservations before tracing.
 
+Closed classic `JobMemory` mappings can enter a process-wide, one-slot reuse
+cache. The used basedata and guest-memory bytes must be zero before reuse.
+Small regions are cleared directly. On Darwin/arm64, larger regions first use
+`MADV_ZERO`; if the kernel rejects the request, Wago clears the bytes itself.
+This fallback covers copy-on-write mappings left after spawning a child process.
+Darwin's `MADV_DONTNEED` does not satisfy the zero-on-reuse contract. See the
+[reclaim implementation](src/core/runtime/madvise_darwin.go) and
+[child-process reuse regression](src/core/runtime/basedata_darwin_test.go).
+
 ### Off-heap allocation
 
 `Arena` hands out stable, off-heap, 8-byte-aligned buffers for everything native

@@ -132,7 +132,7 @@ func TestAcquireJobMemoryGrowableReusesZeroedMemory(t *testing.T) {
 	}
 }
 
-// TestAcquireJobMemoryGrowableReusesLargeReservation exercises the MADV_DONTNEED
+// TestAcquireJobMemoryGrowableReusesLargeReservation exercises the platform
 // reclaim path (used region above jobMemoryReclaimThreshold): a large, dirtied
 // reservation must read back fully zeroed on reuse, and the mapping must be
 // reused (same base), not freshly mmap'd.

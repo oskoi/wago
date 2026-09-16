@@ -27,10 +27,21 @@ func TestMadviseDontNeedMappedAndEmptyRanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer munmap(mem)
-	mem[0] = 1
+	defer func() {
+		if err := munmap(mem); err != nil {
+			t.Errorf("unmap reclaimed memory: %v", err)
+		}
+	}()
+	for i := range mem {
+		mem[i] = 0xa5
+	}
 	if err := madviseDontNeed(mem); err != nil {
 		t.Fatalf("madviseDontNeed(mapped): %v", err)
+	}
+	for i, b := range mem {
+		if b != 0 {
+			t.Fatalf("reclaimed memory byte %d = %#x, want 0", i, b)
+		}
 	}
 }
 
@@ -295,6 +306,7 @@ func TestRuntimeMappingBoundaryHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	first.CurrentBytes()[0] = 0xa5
 	if err := ReleaseJobMemory(first); err != nil {
 		t.Fatalf("ReleaseJobMemory(first): %v", err)
 	}
@@ -302,6 +314,7 @@ func TestRuntimeMappingBoundaryHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	second.CurrentBytes()[0] = 0x5a
 	if err := ReleaseJobMemory(second); err != nil {
 		t.Fatalf("ReleaseJobMemory(second): %v", err)
 	}
@@ -312,8 +325,11 @@ func TestRuntimeMappingBoundaryHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cached != first {
-		t.Fatal("expected cached job memory")
+	for i, b := range cached.CurrentBytes() {
+		if b != 0 {
+			t.Errorf("reused linear memory byte %d = %#x, want 0", i, b)
+			break
+		}
 	}
 	if err := cached.Close(); err != nil {
 		t.Fatalf("Close cached job memory: %v", err)

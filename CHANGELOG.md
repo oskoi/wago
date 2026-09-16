@@ -13,6 +13,8 @@ with `v0.1.0-beta.8`; earlier prereleases remain available in the
 
 ### Fixed
 
+- Clear recycled guest memory on macOS when `MADV_ZERO` fails, including
+  copy-on-write mappings left after child-process creation.
 - Shared-control refresh preserves pending cancellation instead of clearing
   the active trap cell.
 - Warm artifact adoption enforces source-size quotas using the same

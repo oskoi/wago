@@ -25,9 +25,8 @@ func madviseDontNeed(b []byte) error {
 		uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)), madvZero); errno == 0 {
 		return nil
 	}
-	if _, _, errno := syscall.Syscall(syscall.SYS_MADVISE,
-		uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)), syscall.MADV_DONTNEED); errno != 0 {
-		return errno
-	}
+	// MADV_ZERO can reject fork-created copy-on-write mappings. Darwin's
+	// MADV_DONTNEED does not guarantee zeroed pages, so clear on failure.
+	clear(b)
 	return nil
 }
